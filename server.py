@@ -1,4 +1,5 @@
 import socket, select, json
+import mazeMaker
 
 class Server(object):
     # List to keep track of socket descriptors
@@ -26,11 +27,14 @@ class Server(object):
             'SEND_NEW_MAP':13,
             'READY_FOR_START':14,
             'START_AGAING':15,
+            'WINNER':16,
+            'CONGRATULATION': 17
+            'END_GAME': 18,
             'DISCONNECT':99
         }
         self.there_is_winner = False
         self.players_count = 0
-        self.user_name_dict = {}
+        self.clients_dict = {}
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.set_up_connections()
         self.client_connect()
@@ -66,7 +70,6 @@ class Server(object):
             self.CONNECTION_LIST.remove(sock)
 
     def client_connect(self):
-        print "Chat server started on port " + str(self.PORT)
         while 1:
             # Get the list sockets which are ready to be read through select
             read_sockets, write_sockets, error_sockets = select.select(self.CONNECTION_LIST, [], [])
@@ -94,16 +97,17 @@ class Server(object):
                                         pass
 
                                 elif self.players_count == MAX_PLAYERS: # starting game
-                                    if self.there_is_winner:
-                                        for sock_dest, connect in self.user_name_dict.iteritems():
+                                        for sock_dest, connect in self.clients_dict.iteritems():
                                             message_map = {'option': self.map_codes[SET_GAME], 'player_id': connect.get_player_id()}
                                             send_data_to(sock_dest, self.give_json(message_map))
 
                                         # FALTA GENERAR MAPA    
-                                        for sock_dest, connect in self.user_name_dict.iteritems():
+                                        for sock_dest, connect in self.clients_dict.iteritems():
                                             generated_map = self.generate_map(connect.player_id)
                                             connect.set_map( generate_map)
-                                            message_map = {'option': self.map_codes[SEND_MAP], 'matrix_size': len(generated_map), 'map_data': generated_map }
+                                            message_map = {'option': self.map_codes[SEND_MAP], 
+                                                            'matrix_size': len(generated_map), 
+                                                            'map_data': generated_map }
                                             send_data_to(sock_dest, self.give_json(message_map))
 
                             if data_map['option'] == self.map_codes['POSITION']:
@@ -120,9 +124,35 @@ class Server(object):
                                     broadcast_all_clients( message_map )
 
                             if data_map['option'] == self.map_codes['UPDATE_POSITION']:
+                                pos_x = data_map['matrix_pos_x']
+                                pos_y = data_map['matrix_pos_y']
+                                player_sender_id = data_map['player_id']
 
-                            
-                        
+                                self.clients_dict[sock].position_x = pos_x
+                                self.clients_dict[sock].position_y = pos_y
+                                
+                            if data_map['option'] == self.map_codes['FREE_SPACE']:
+                                pos_free_x = data_map['matrix_free_x']
+                                pos_free_y = data_map['matrix_free_y']
+                                player_sender_id = data_map['player_id']
+                                #call mazeMaker
+                                free_spaces = 0       
+                                positions_free = {}
+                                message_map = {'option': self.map_codes['SPACES'], 
+                                                'cantidad_liberados': free_spaces, 
+                                                'liberados': positions_free}
+                                send_data_to(sock, message_map)
+
+                            if data_map['option'] == self.map_codes['NEW_MAP']: ## remove ? 
+                                pass
+                            if data_map['option'] == self.map_codes['READY_FOR_START']: # delete? 
+                                message_map  = {'option':self.map_codes['START_AGAING']}
+                                send_data_to( sock, message_map)
+                            if data_map['option'] == self.map_codes['WINNER']: # delete? 
+                                message_map_losers = {'option': self.map_codes['END_GAME']}
+                                message_map_winner = {'option': self.map_codes['CONGRATULATION']}
+                                send_data_to(sock, message_map_winner )
+                                broadcast_all_clients_except_one( sock, message_map_losers)
 
                     except:
                         #self.broadcast_data(sock, "Client (%s, %s) is offline" % addr)
@@ -135,22 +165,22 @@ class Server(object):
 
     def setup_connection(self, id_connection):
         sockfd, addr = self.server_socket.accept()
-        self.CONNECTION_LIST.append(sockfd)
+        self.CONNECTION_LIST.append(sockfd) ## delete ?
         print " [+] Client (%s, %s) connected" % addr
 
         message = {'option': self.map_codes['CONNECTION'] }
         self.send_data_to(sockfd, self.give_json(message) )
 
-        self.user_name_dict.update({sockfd: Connection(addr, id_connection)})
+        self.clients_dict.update({sockfd: Connection(addr, id_connection)})
         
 
     def broadcast_all_clients_except_one(self, sock, message):
-        for local_soc, connection in self.user_name_dict.iteritems():
+        for local_soc, connection in self.clients_dict.iteritems():
             if local_soc != sock and connection.player_id is not None:
                 self.send_data_to(local_soc, message)
 
     def broadcast_all_clients(self, message_map)
-        for soc, connection in self.user_name_dict.iteritems():
+        for soc, connection in self.clients_dict.iteritems():
             if connection.player_id is not None:
                 send_data_to(soc, self.give_json(message_map) )
 
@@ -159,7 +189,7 @@ class Server(object):
         return str(len(jsonstr)).zfill(4) + jsonstr
 
     def generate_map(self, player_id):
-        return [] ## call map generator
+        return mazeMaker.callmap() ## call map generator
 
     def validate_position(self, pos_x, pos_y):
         return True # call validate
@@ -171,6 +201,8 @@ class Connection(object):
         self.username = None #optional ?
         self.player_id = None
         self.map = []
+        self.position_x = 0
+        self.position_y = 0
 
     def get_map(self):    
         return self.map
