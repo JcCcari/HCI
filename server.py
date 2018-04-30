@@ -28,7 +28,7 @@ class Server(object):
             'READY_FOR_START':14,
             'START_AGAING':15,
             'WINNER':16,
-            'CONGRATULATION': 17
+            'CONGRATULATION': 17,
             'END_GAME': 18,
             'DISCONNECT':99
         }
@@ -41,6 +41,7 @@ class Server(object):
 
     def set_up_connections(self):
         # this has no effect, why ?
+        print ">> Setup connections"
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind(("0.0.0.0", self.PORT))
         self.server_socket.listen(10)  # max simultaneous connections.
@@ -70,6 +71,7 @@ class Server(object):
             self.CONNECTION_LIST.remove(sock)
 
     def client_connect(self):
+        print ">> Waiting clients"
         while 1:
             # Get the list sockets which are ready to be read through select
             read_sockets, write_sockets, error_sockets = select.select(self.CONNECTION_LIST, [], [])
@@ -130,6 +132,8 @@ class Server(object):
 
                                 self.clients_dict[sock].position_x = pos_x
                                 self.clients_dict[sock].position_y = pos_y
+
+                                #broadcast?
                                 
                             if data_map['option'] == self.map_codes['FREE_SPACE']:
                                 pos_free_x = data_map['matrix_free_x']
@@ -138,7 +142,7 @@ class Server(object):
                                 #call mazeMaker
                                 free_spaces = 0       
                                 positions_free = {}
-                                message_map = {'option': self.map_codes['SPACES'], 
+                                message_map = { 'option': self.map_codes['SPACES'], 
                                                 'cantidad_liberados': free_spaces, 
                                                 'liberados': positions_free}
                                 send_data_to(sock, message_map)
@@ -177,9 +181,9 @@ class Server(object):
     def broadcast_all_clients_except_one(self, sock, message):
         for local_soc, connection in self.clients_dict.iteritems():
             if local_soc != sock and connection.player_id is not None:
-                self.send_data_to(local_soc, message)
+                self.send_data_to(local_soc, message)            
 
-    def broadcast_all_clients(self, message_map)
+    def broadcast_all_clients(self, message_map):
         for soc, connection in self.clients_dict.iteritems():
             if connection.player_id is not None:
                 send_data_to(soc, self.give_json(message_map) )
@@ -210,7 +214,7 @@ class Connection(object):
     def set_map( self, new_map):
         self.map = new_map
 
-    def.get_player_id(self):
+    def get_player_id(self):
         return self.player_id;
 
 
