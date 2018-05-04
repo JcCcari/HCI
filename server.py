@@ -6,7 +6,7 @@ class Server(object):
     CONNECTION_LIST = []
     players_list = []
     viewers_list = []
-    MAX_PLAYERS = 4
+    MAX_PLAYERS = 1
     RECV_BUFFER = 4096  # Advisable to keep it as an exponent of 2
     PORT = 5000
 
@@ -62,16 +62,24 @@ class Server(object):
                     socket.close()
                     self.CONNECTION_LIST.remove(socket)
 
+    def broadcast_all(self, message):
+        for sock, conn in self.clients_dict.iteritems():
+            message_map = self.give_json(message)
+            send_data_to(sock,message_map)
+
     def send_data_to(self, sock, message):
         try:
             sock.send(message)
-        except:
+        except Exception as e:
             # broken socket connection may be, chat client pressed ctrl+c for example
+            print e
             socket.close()
             self.CONNECTION_LIST.remove(sock)
 
     def client_connect(self):
         print ">> Waiting clients"
+        clients_connected_id = 0
+        players_validated = 0
         while 1:
             # Get the list sockets which are ready to be read through select
             read_sockets, write_sockets, error_sockets = select.select(self.CONNECTION_LIST, [], [])
@@ -80,46 +88,75 @@ class Server(object):
                 # New connection
                 if sock == self.server_socket:
                     # Handle the case in which there is a new connection recieved through server_socket
-                    self.setup_connection( self.players_count ) # players_count = player_id
-                    self.players_count = self.players_count + 1
+                    self.setup_connection( clients_connected_id )
+                    clients_connected_id = clients_connected_id + 1
                 # Some incoming message from a client
                 else:
                     # Data recieved from client, process it
                     try:
                         data = sock.recv(self.RECV_BUFFER)
                         data_map = json.loads(data)
+                        print data_map
                         if data:
                             #if self.players_count < MAX_PLAYERS : # waiting players
                             if data_map['option'] == self.map_codes['LOGIN']:
-                                if self.players_count < MAX_PLAYERS : # waiting players
-                                    if data_map['type'] == 0: # players
-                                        message_map = { 'option': self.map_codes[WAIT_PLAYERS]}
-                                        self.send_data_to( sock, give_json(message_map))
-                                    elif data_map['type'] == 1: # viewers
+                                #print " LOGIN "
+                                #print " Player Count ", self.players_count
+                                if self.players_count < self.MAX_PLAYERS : # waiting players
+                                    #print data_map
+                                    #print " Player Count ", self.players_count
+                                    if data_map['type'] == 1: # players
+                                        print " Recibed Player", self.players_count
+
+                                        message_map = { 'option': self.map_codes['WAIT_PLAYERS'] }
+                                        #print message_map
+                                        #print self.give_json(message_map)
+                                        self.send_data_to( sock, self.give_json(message_map))
+                                        #print message_map
+                                        self.players_count += 1
+                                        #print " get out login player"
+                                    elif data_map['type'] == 2: # viewers
+                                        print " Recibed Viewer", self.players_count
                                         pass
 
-                                elif self.players_count == MAX_PLAYERS: # starting game
+                                print " Player Count ", self.players_count
+                                print " client dict ",self.clients_dict
+                                if self.players_count == self.MAX_PLAYERS : # starting game
+                                        print " Starting game!"
+                                        print " Sending package set game!"
                                         for sock_dest, connect in self.clients_dict.iteritems():
-                                            message_map = {'option': self.map_codes[SET_GAME], 'player_id': connect.get_player_id()}
-                                            send_data_to(sock_dest, self.give_json(message_map))
+                                            print "Senfing to: ", connect.address
+                                            message_map = { 'option': self.map_codes['SET_GAME'], 
+                                                            'player_id': connect.get_player_id() }
+                                            print message_map, 1
+                                            print self.give_json(message_map)
+                                            self.send_data_to(sock_dest, self.give_json(message_map))
+                                            print message_map, 2
 
                                         # FALTA GENERAR MAPA    
+                                        print " Sending Map"
                                         for sock_dest, connect in self.clients_dict.iteritems():
                                             generated_map = self.generate_map(connect.player_id)
-                                            connect.set_map( generate_map)
-                                            message_map = {'option': self.map_codes[SEND_MAP], 
+                                            print " Sending to1: ",connect.address
+                                            #connect.set_map( generate_map )
+                                            #connect.map = generate_map
+                                            print " Sending to2: ",connect.address
+                                            message_map = {'option': self.map_codes['SEND_MAP'], 
                                                             'matrix_size': len(generated_map), 
-                                                            'map_data': generated_map }
-                                            send_data_to(sock_dest, self.give_json(message_map))
+                                                            'map_data': mazeMaker.maze_to_JSON(generated_map) }
+                                            print message_map
+                                            print " json map ",self.give_json(message_map)
+                                            self.send_data_to(sock_dest, self.give_json(message_map))
+                                            print "map sended!"
 
                             if data_map['option'] == self.map_codes['POSITION']:
                                 pos_x = data_map['matrix_pos_x']
                                 pos_y = data_map['matrix_pos_y']
-                                players_validated = 0
-                                if validate_position( pos_x, pos_y):
-                                    message_map = {'option': self.map_codes['VALIDATION']}
-                                    self.send_data_to(sock, self.give_json(message_map))
-                                    players_validated += 1
+                                
+                                #if validate_position( pos_x, pos_y):
+                                message_map = {'option': self.map_codes['VALIDATION']}
+                                self.send_data_to(sock, self.give_json(message_map))
+                                players_validated += 1
 
                                 if players_validated == self.MAX_PLAYERS:
                                     message_map = {'option': self.map_codes['START']}
@@ -138,20 +175,20 @@ class Server(object):
                             if data_map['option'] == self.map_codes['FREE_SPACE']:
                                 pos_free_x = data_map['matrix_free_x']
                                 pos_free_y = data_map['matrix_free_y']
-                                player_sender_id = data_map['player_id']
-                                #call mazeMaker
-                                free_spaces = 0       
-                                positions_free = {}
-                                message_map = { 'option': self.map_codes['SPACES'], 
-                                                'cantidad_liberados': free_spaces, 
-                                                'liberados': positions_free}
-                                send_data_to(sock, message_map)
+                                player_sender_id = data_map['playeelf.players_count < MAX_PLAYERS : # waiting playerself.players_count < MAX_PLAYERS : # waiting playersr_id']
+                                #call mazeMaker !!!!!!!!!!!!!!!!!!
+                                
+                                #positions_free = {}
+                                #message_map = { 'option': self.map_codes['SPACES'] }
+                                                #'cantidad_liberados': free_spaces, 
+                                                #'liberados': positions_free}
+                                #send_data_to(sock, message_map)
 
-                            if data_map['option'] == self.map_codes['NEW_MAP']: ## remove ? 
-                                pass
-                            if data_map['option'] == self.map_codes['READY_FOR_START']: # delete? 
-                                message_map  = {'option':self.map_codes['START_AGAING']}
-                                send_data_to( sock, message_map)
+                            #if data_map['option'] == self.map_codes['NEW_MAP']: ## remove ? 
+                            #    pass
+                            #if data_map['option'] == self.map_codes['READY_FOR_START']: # delete? 
+                            #    message_map  = {'option':self.map_codes['START_AGAING'] }
+                            #    send_data_to( sock, message_map)
                             if data_map['option'] == self.map_codes['WINNER']: # delete? 
                                 message_map_losers = {'option': self.map_codes['END_GAME']}
                                 message_map_winner = {'option': self.map_codes['CONGRATULATION']}
@@ -160,7 +197,7 @@ class Server(object):
 
                     except:
                         #self.broadcast_data(sock, "Client (%s, %s) is offline" % addr)
-                        print " [-] Client (%s, %s) is offline" % addr
+                        #print " [-] Client (%s, %s) is offline" % addr
                         sock.close()
                         self.CONNECTION_LIST.remove(sock)
                         continue
@@ -176,6 +213,7 @@ class Server(object):
         self.send_data_to(sockfd, self.give_json(message) )
 
         self.clients_dict.update({sockfd: Connection(addr, id_connection)})
+        print " client dict ",self.clients_dict
         
 
     def broadcast_all_clients_except_one(self, sock, message):
@@ -203,8 +241,8 @@ class Connection(object):
     def __init__(self, address, id):
         self.address = address
         self.username = None #optional ?
-        self.player_id = None
-        self.map = []
+        self.player_id = id
+        self.map = None
         self.position_x = 0
         self.position_y = 0
 

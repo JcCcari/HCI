@@ -93,12 +93,13 @@ def check_visibility(row,col,maze_mines):
 
 def callmap():
     maze = make_maze()
-    for i in maze:
-        print(i)
+    #for i in maze:
+    #    print(i)
 
     maze_mines = mine_counter(maze)
-    for i in maze_mines:
-        print(i)
+    #for i in maze_mines:
+    #    print(i)
 
     serialized = maze_to_JSON(maze_mines)
-    return serialized
+    #return serialized
+    return maze_mines
