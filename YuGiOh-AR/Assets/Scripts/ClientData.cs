@@ -9,7 +9,7 @@ using System.Net.Sockets;
 namespace AssemblyCSharp
 {
     [Serializable]
-    public class PlayerInfo: MonoBehaviour
+    public class PlayerInfo
     {
         public const int CLIENT_TYPE_PLAYER = 0;
         public const int CLIENT_TYPE_SPECTATOR = 1;
@@ -40,7 +40,16 @@ namespace AssemblyCSharp
         Socket playerSocket = null;
         private byte[] _recieveBuffer = new byte[256];
 
+        //private List<String> objectsTouched;
+        private HashSet<String> objectsTouched;
+
         public int currentOption;
+
+        public PlayerInfo()
+        {
+            //objectsTouched = new List<String>();
+            objectsTouched = new HashSet<String>();
+        }
 
         public static PlayerInfo Instance
         {
@@ -52,6 +61,11 @@ namespace AssemblyCSharp
             }
         }
 
+
+
+        public HashSet<String> ObjectsTouched { get { return objectsTouched; } }
+        //public List<String> ObjectsTouched { get { return objectsTouched; } }
+
         public void sendPlay()
         {
             
@@ -59,7 +73,7 @@ namespace AssemblyCSharp
 
         public bool startConnection(String ip, int port, int _typePlayer)
         {
-            Debug.Log("Trying to connect ...");
+            Debug.Log("#Trying to connect ...");
             try{
                 this.typePlayer = _typePlayer;
 
@@ -79,10 +93,10 @@ namespace AssemblyCSharp
             catch (SocketException ex){
                 Debug.Log(ex.Message);
                 playerSocket = null;
-                Debug.Log("[ERROR] Wrong Connection ");
+                Debug.Log("#[ERROR] Wrong Connection ");
                 return false;
             }
-            Debug.Log("[OK] Connection Succesfull");
+            Debug.Log("#[OK] Connection Succesfull");
             return true;
         }
 
@@ -124,6 +138,18 @@ namespace AssemblyCSharp
             catch (SocketException ex){
                 Debug.Log(ex.Message);
             }
+        }
+
+        public void select(String objname)
+        {
+            Debug.Log("#After " + objectsTouched.Count);
+            objectsTouched.Add(objname);
+            Debug.Log("#Before " + objectsTouched.Count);
+        }
+
+        public void attack()
+        {
+
         }
     }
 }
